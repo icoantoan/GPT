@@ -7,3 +7,4 @@ services:
     envVars:
       - key: GOOGLE_CREDENTIALS_JSON
         value: YOUR_GOOGLE_CREDENTIALS_JSON_HERE
+        PORT: 8000
