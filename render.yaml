@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: GPT-Bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python ChatGPTbot.py"
+    envVars:
+      - key: GOOGLE_CREDENTIALS_JSON
+        value: YOUR_GOOGLE_CREDENTIALS_JSON_HERE

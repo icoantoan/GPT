@@ -10,6 +10,7 @@ from telegram.helpers import escape_markdown
 import re  # Import thêm để dùng regex kiểm tra định dạng ví Solana
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -115,21 +116,44 @@ if not GOOGLE_CREDENTIALS_FILE:
     raise ValueError("GOOGLE_CREDENTIALS_FILE is not set in the .env file")
 
 print(f"Using Google credentials file: {GOOGLE_CREDENTIALS_FILE}")
+GOOGLE_CREDENTIALS_ENV = "GOOGLE_CREDENTIALS_JSON"
 
 # Initialize Google Sheets
 def init_google_sheet():
     try:
+        # Phạm vi truy cập Google Sheets API
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        credentials = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_CREDENTIALS_FILE, scope)
+
+        # Kiểm tra xem có sử dụng biến môi trường hay không
+        google_credentials_json = os.getenv(GOOGLE_CREDENTIALS_ENV)
+        if google_credentials_json:
+            # Tạo credentials từ JSON trong biến môi trường
+            logging.info("Initializing Google Sheets using environment variable.")
+            credentials = ServiceAccountCredentials.from_json_keyfile_dict(json.loads(google_credentials_json), scope)
+        elif os.path.exists(GOOGLE_CREDENTIALS_FILE):
+            # Sử dụng tệp JSON nếu có
+            logging.info(f"Initializing Google Sheets using file: {GOOGLE_CREDENTIALS_FILE}")
+            credentials = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_CREDENTIALS_FILE, scope)
+        else:
+            raise ValueError("Google credentials are not provided. Set GOOGLE_CREDENTIALS_JSON or GOOGLE_CREDENTIALS_FILE.")
+
+        # Kết nối với Google Sheets
         gc = gspread.authorize(credentials)
-        sheet = gc.open("ELON").sheet1
+        sheet = gc.open(GOOGLE_SHEET_NAME).sheet1
         logging.info("Google Sheets connected successfully!")
         return sheet
+
     except Exception as e:
         logging.error(f"Error initializing Google Sheets: {e}")
         raise
 
-sheet = init_google_sheet()
+# Khởi tạo kết nối với Google Sheets
+try:
+    sheet = init_google_sheet()
+except ValueError as ve:
+    logging.error(f"Configuration Error: {ve}")
+except Exception as e:
+    logging.error(f"Initialization Failed: {e}")
 
 # User Data (Stored in Memory)
 user_data = {}  # {user_id: {"elon": int, "boxes": int, "referrals": int, "history": []}}
