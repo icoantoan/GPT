@@ -16,6 +16,19 @@ load_dotenv()
 
 app = Flask(__name__)
 
+@app.route("/", methods=["GET"])
+def home():
+    return "Hello, your bot is live!"
+
+@app.route("/", methods=["POST"])
+def webhook():
+    # Xử lý webhook của Telegram
+    return "Webhook received", 200
+    data = request.get_json()
+    # Thêm logic xử lý dữ liệu từ Telegram tại đây
+    print(data)
+    return "OK", 200
+
 # Khởi tạo bot Telegram
 TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Thay bằng token của bạn
 application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
