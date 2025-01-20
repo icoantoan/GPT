@@ -40,8 +40,8 @@ async def start(update: Update, context):
 application.add_handler(CommandHandler("start", start))
 
 # Endpoint nhận webhook từ Telegram
-@app.route('/webhook', methods=['POST'])
-def webhook():
+@app.route('/another_webhook', methods=['POST'])
+def another_webhook():
     if request.method == "POST":
         update = Update.de_json(request.get_json(force=True), application.bot)
         application.update_queue.put_nowait(update)
