@@ -11,6 +11,7 @@ import re  # Import thêm để dùng regex kiểm tra định dạng ví Solana
 import os
 from dotenv import load_dotenv
 import json
+import asyncio
 
 load_dotenv()
 
@@ -32,7 +33,7 @@ def home():
 
 # Webhook route
 @app.route("/webhook", methods=["POST"])
-def webhook():
+async def webhook():
     try:
         json_data = request.get_json(force=True)
         if not json_data:
@@ -40,7 +41,7 @@ def webhook():
 
         # Parse Telegram update
         update = Update.de_json(json_data, application.bot)
-        application.process_update(update)
+        await application.process_update(update)
         return "Webhook received and processed", 200
     except Exception as e:
         app.logger.error(f"Error in webhook: {e}")
