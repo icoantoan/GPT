@@ -1,1 +1,1 @@
-web: python3 ChatGPTbot.py
+web: gunicorn ChatGPTbot:app

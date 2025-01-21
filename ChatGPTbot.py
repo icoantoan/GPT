@@ -1,51 +1,108 @@
+from flask import Flask, request, jsonify
+# Flask app
+app = Flask(__name__)
 import logging
-from flask import Flask, request
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+import threading
 import random
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters, Application
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from telegram.helpers import escape_markdown
 import re  # Import thêm để dùng regex kiểm tra định dạng ví Solana
 import os
 from dotenv import load_dotenv
 import json
 import asyncio
+from telegram.ext import Application
 
+# Thiết lập logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+# Tải các biến môi trường từ file .env
 load_dotenv()
+# Kiểm tra đường dẫn file .env
+dotenv_path = os.path.abspath('.env')
+print(f"Đường dẫn file .env: {dotenv_path}")
 
-# Flask app
-app = Flask(__name__)
-
-# Telegram bot token
+# Lấy biến TELEGRAM_BOT_TOKEN
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN is not set in .env file!")
 
-# Telegram application
+if TELEGRAM_BOT_TOKEN:
+    print(f"Token Telegram đã nạp: {TELEGRAM_BOT_TOKEN}")
+else:
+    raise ValueError("TELEGRAM_BOT_TOKEN không được tìm thấy trong file .env!")
+
+# URL gốc cho webhook
+DEPLOYMENT_URL = os.getenv("DEPLOYMENT_URL")  # Nạp URL từ file .env
+
+# Kiểm tra nếu DEPLOYMENT_URL không tồn tại
+if not DEPLOYMENT_URL:
+    raise ValueError("DEPLOYMENT_URL không được định nghĩa trong file .env!")
+
+# Định nghĩa URL webhook
+WEBHOOK_URL = f"{DEPLOYMENT_URL}/webhook/{TELEGRAM_BOT_TOKEN}"
+print(f"Webhook URL được thiết lập: {WEBHOOK_URL}")
+
+# Sử dụng các biến môi trường
+HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
+HELIUS_API_URL = os.getenv("HELIUS_API_URL")
+CONTRACT_USDC = os.getenv("CONTRACT_USDC")
+BOX_WALLET_ADDRESS = os.getenv("BOX_WALLET_ADDRESS")
+BOT_WALLET_PRIVATE_KEY = os.getenv("BOT_WALLET_PRIVATE_KEY")
+ELON_MINT_ADDRESS = os.getenv("ELON_MINT_ADDRESS")
+
+if not HELIUS_API_KEY:
+    raise ValueError("HELIUS_API_KEY is not set in .env file")
+
+# Google Sheets Config
+GOOGLE_SHEET_NAME = "ELON"
+GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE")
+if not GOOGLE_CREDENTIALS_FILE:
+    raise ValueError("GOOGLE_CREDENTIALS_FILE is not set in the .env file")
+
+print(f"Using Google credentials file: {GOOGLE_CREDENTIALS_FILE}")
+GOOGLE_CREDENTIALS_ENV = "GOOGLE_CREDENTIALS_JSON"
+
+# Khởi tạo Application toàn cục khi chương trình khởi động
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+asyncio.run(application.initialize())
 
-# Home route
-@app.route("/", methods=["GET"])
-def home():
-    return "Hello, your bot is live!"
+async def initialize_application():
+    await application.initialize()
 
-# Webhook route
-@app.route("/webhook", methods=["POST"])
-async def webhook():
+from asgiref.sync import async_to_sync
+
+
+# Thiết lập logging
+logging.basicConfig(level=logging.DEBUG)
+app.logger.setLevel(logging.DEBUG)
+
+# Định nghĩa route để nhận webhook
+@app.route('/webhook/<token>', methods=['POST', 'GET'])
+def webhook(token):
+    # So sánh token với biến môi trường TELEGRAM_BOT_TOKEN
+    if token != os.getenv("TELEGRAM_BOT_TOKEN"):
+        return jsonify({"error": "Invalid token"}), 403
+
+    # Lấy JSON data từ webhook request
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid data"}), 400
+
+    print(f"Received update: {data}")  # Log data nhận được
+    return jsonify({"status": "success"}), 200
+
+# Đặt webhook
+async def set_webhook():
     try:
-        json_data = request.get_json(force=True)
-        if not json_data:
-            return "No JSON payload received", 400
-
-        # Parse Telegram update
-        update = Update.de_json(json_data, application.bot)
-        await application.process_update(update)
-        return "Webhook received and processed", 200
+        await application.bot.set_webhook(WEBHOOK_URL)
+        logger.info(f"Webhook đã được đặt thành công: {WEBHOOK_URL}")
     except Exception as e:
-        app.logger.error(f"Error in webhook: {e}")
-        return "Internal Server Error", 500
+        logger.error(f"Lỗi khi đặt webhook: {e}")
 
 def initialize_google_sheet(sheet):
     """
@@ -102,34 +159,6 @@ def load_data_from_sheet():
     except Exception as e:
         logging.error(f"Error loading data from Google Sheets: {e}")
 
-
-
-import os
-from dotenv import load_dotenv
-
-# Tải các biến môi trường từ file .env
-load_dotenv()
-
-# Sử dụng các biến môi trường
-HELIUS_API_KEY = os.getenv("HELIUS_API_KEY")
-HELIUS_API_URL = os.getenv("HELIUS_API_URL")
-CONTRACT_USDC = os.getenv("CONTRACT_USDC")
-BOX_WALLET_ADDRESS = os.getenv("BOX_WALLET_ADDRESS")
-BOT_WALLET_PRIVATE_KEY = os.getenv("BOT_WALLET_PRIVATE_KEY")
-ELON_MINT_ADDRESS = os.getenv("ELON_MINT_ADDRESS")
-
-if not HELIUS_API_KEY:
-    raise ValueError("HELIUS_API_KEY is not set in .env file")
-
-# Google Sheets Config
-GOOGLE_SHEET_NAME = "ELON"
-GOOGLE_CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE")
-if not GOOGLE_CREDENTIALS_FILE:
-    raise ValueError("GOOGLE_CREDENTIALS_FILE is not set in the .env file")
-
-print(f"Using Google credentials file: {GOOGLE_CREDENTIALS_FILE}")
-GOOGLE_CREDENTIALS_ENV = "GOOGLE_CREDENTIALS_JSON"
-
 # Initialize Google Sheets
 def init_google_sheet():
     try:
@@ -151,7 +180,12 @@ def init_google_sheet():
 
         # Kết nối với Google Sheets
         gc = gspread.authorize(credentials)
-        sheet = gc.open(GOOGLE_SHEET_NAME).sheet1
+        try:
+            sheet = gc.open(GOOGLE_SHEET_NAME).sheet1
+        except Exception as e:
+            logging.error(f"Failed to open Google Sheet: {e}")
+            raise
+
         logging.info("Google Sheets connected successfully!")
         return sheet
 
@@ -279,11 +313,13 @@ def load_user_data_from_sheet(user_id):
         return {"elon": 0, "boxes": 0, "referrals": 0, "history": []}
 
 # Command: /start
+    print(f"Received /start command from user: {update.message.from_user.id}")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"Received /start command from user: {update.message.from_user.id}")
     user_id = str(update.message.from_user.id)
     username = update.message.from_user.username or "Anonymous"
     referrer_username = None
-
+    
     # Kiểm tra liên kết ref
     if context.args:
         referrer_username = context.args[0]
@@ -335,7 +371,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
         parse_mode="Markdown",
     )
-
+print("Message sent successfully.")
 # Function: Open Box
 async def open_box(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -716,9 +752,7 @@ def main():
     # Tải dữ liệu từ Google Sheets
     load_data_from_sheet()
 
-    # Khởi động bot
-    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
+    # Thêm các handler cho Telegram bot
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(open_box, pattern="open_box"))
     application.add_handler(CallbackQueryHandler(buy_box, pattern="buy_box"))
@@ -729,8 +763,35 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_wallet_address))
     application.add_handler(CallbackQueryHandler(view_top_users, pattern="view_top_users"))
 
-    application.run_polling()
+    # Tạo vòng lặp sự kiện mới
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    import asyncio
 
+# Telegram bot application
+application = Application.builder().token("YOUR_TELEGRAM_BOT_TOKEN").build()
 
+def run_flask():
+    """Run Flask server."""
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), debug=False, use_reloader=False)
+
+async def startup():
+    """
+    Hàm khởi tạo bot và đặt webhook
+    """
+    await application.initialize()
+    await set_webhook()
+async def main():
+    application.add_handler(CommandHandler("start", start))
+    await application.initialize()
+    await set_webhook()
+# Main execution
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    # Run Flask in a separate thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+
+    # Set webhook and run bot
+    asyncio.run(set_webhook())
+
+    app.run(debug=True)
