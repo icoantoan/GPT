@@ -101,8 +101,7 @@ def load_data_from_sheet():
     except Exception as e:
         logging.error(f"Error loading data from Google Sheets: {e}")
 
-# Telegram Bot Token
-TELEGRAM_TOKEN = "7423111101:AAG6oYWIdUg_ONZsICSZn88B3ERk8C3PZWQ"
+
 
 import os
 from dotenv import load_dotenv
@@ -708,7 +707,6 @@ def update_missing_usernames():
     except Exception as e:
         logging.error(f"Error updating missing usernames: {e}")
 
-
 # Main Function
 def main():
     # Khởi tạo Google Sheets
@@ -718,7 +716,7 @@ def main():
     load_data_from_sheet()
 
     # Khởi động bot
-    application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(open_box, pattern="open_box"))
@@ -735,4 +733,3 @@ def main():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
-
