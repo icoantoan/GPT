@@ -5,7 +5,7 @@ import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters, Application
 from telegram.helpers import escape_markdown
 import re  # Import thêm để dùng regex kiểm tra định dạng ví Solana
 import os
@@ -14,38 +14,37 @@ import json
 
 load_dotenv()
 
+# Flask app
 app = Flask(__name__)
 
+# Telegram bot token
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+if not TELEGRAM_BOT_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN is not set in .env file!")
+
+# Telegram application
+application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+# Home route
 @app.route("/", methods=["GET"])
 def home():
     return "Hello, your bot is live!"
 
-@app.route("/", methods=["POST"])
+# Webhook route
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    # Xử lý webhook của Telegram
-    return "Webhook received", 200
-    data = request.get_json()
-    # Thêm logic xử lý dữ liệu từ Telegram tại đây
-    print(data)
-    return "OK", 200
+    try:
+        json_data = request.get_json(force=True)
+        if not json_data:
+            return "No JSON payload received", 400
 
-# Khởi tạo bot Telegram
-TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"  # Thay bằng token của bạn
-application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
-# Định nghĩa hàm /start
-async def start(update: Update, context):
-    await update.message.reply_text("🤖 Welcome to the ELON Rewards Bot!")
-
-application.add_handler(CommandHandler("start", start))
-
-# Endpoint nhận webhook từ Telegram
-@app.route('/another_webhook', methods=['POST'])
-def another_webhook():
-    if request.method == "POST":
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        application.update_queue.put_nowait(update)
-        return "OK", 200
+        # Parse Telegram update
+        update = Update.de_json(json_data, application.bot)
+        application.process_update(update)
+        return "Webhook received and processed", 200
+    except Exception as e:
+        app.logger.error(f"Error in webhook: {e}")
+        return "Internal Server Error", 500
 
 def initialize_google_sheet(sheet):
     """
